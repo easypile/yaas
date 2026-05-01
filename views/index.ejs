@@ -25,6 +25,7 @@
       fieldset { margin: 0; padding: 0; border: 0; }
       .kinds { display: grid; grid-auto-columns: auto; grid-template-columns: auto auto; text-align: left; margin-bottom: 2rem; }
       label { font-size: 0.95rem; }
+      form { display: flex; flex-direction: column; align-items: center; }
       button {
         border: 1px solid #ccc;
         border-radius: 999px;
@@ -77,11 +78,11 @@
               <input type="hidden" name="tab" value="yes" />
               <fieldset>
                 <div class="kinds">
-                  <label><input type="radio" name="yesKind" value="any" <%= selectedYesKind === 'any' ? 'checked' : '' %> /> Any</label>
-                  <label><input type="radio" name="yesKind" value="agree" <%= selectedYesKind === 'agree' ? 'checked' : '' %> /> Agree</label>
-                  <label><input type="radio" name="yesKind" value="confirm" <%= selectedYesKind === 'confirm' ? 'checked' : '' %> /> Confirm</label>
-                  <label><input type="radio" name="yesKind" value="contradict" <%= selectedYesKind === 'contradict' ? 'checked' : '' %> /> Contradict</label>
-                  <label><input type="radio" name="yesKind" value="encourage" <%= selectedYesKind === 'encourage' ? 'checked' : '' %> /> Encourage</label>
+                  <label><input type="radio" name="kind" value="any" <%= selectedYesKind === 'any' ? 'checked' : '' %> /> Any</label>
+                  <label><input type="radio" name="kind" value="agree" <%= selectedYesKind === 'agree' ? 'checked' : '' %> /> Agree</label>
+                  <label><input type="radio" name="kind" value="confirm" <%= selectedYesKind === 'confirm' ? 'checked' : '' %> /> Confirm</label>
+                  <label><input type="radio" name="kind" value="contradict" <%= selectedYesKind === 'contradict' ? 'checked' : '' %> /> Contradict</label>
+                  <label><input type="radio" name="kind" value="encourage" <%= selectedYesKind === 'encourage' ? 'checked' : '' %> /> Encourage</label>
                 </div>
               </fieldset>
               <p class="phrase"><%= yesPhrase %></p>
@@ -94,10 +95,10 @@
               <input type="hidden" name="tab" value="no" />
               <fieldset>
                 <div class="kinds">
-                  <label><input type="radio" name="noKind" value="any" <%= selectedNoKind === 'any' ? 'checked' : '' %> /> Any</label>
-                  <label><input type="radio" name="noKind" value="refuse" <%= selectedNoKind === 'refuse' ? 'checked' : '' %> /> Refuse</label>
-                  <label><input type="radio" name="noKind" value="surprise" <%= selectedNoKind === 'surprise' ? 'checked' : '' %> /> Surprise</label>
-                  <label><input type="radio" name="noKind" value="reinforce" <%= selectedNoKind === 'reinforce' ? 'checked' : '' %> /> Reinforce</label>
+                  <label><input type="radio" name="kind" value="any" <%= selectedNoKind === 'any' ? 'checked' : '' %> /> Any</label>
+                  <label><input type="radio" name="kind" value="refuse" <%= selectedNoKind === 'refuse' ? 'checked' : '' %> /> Refuse</label>
+                  <label><input type="radio" name="kind" value="surprise" <%= selectedNoKind === 'surprise' ? 'checked' : '' %> /> Surprise</label>
+                  <label><input type="radio" name="kind" value="reinforce" <%= selectedNoKind === 'reinforce' ? 'checked' : '' %> /> Reinforce</label>
                 </div>
               </fieldset>
               <p class="phrase"><%= noPhrase %></p>
@@ -130,14 +131,14 @@
           if (activeTab() !== 'yes') return;
           event.preventDefault();
           const formData = new FormData(yesForm);
-          const kind = formData.get('yesKind');
+          const kind = formData.get('kind');
           const params = {};
           if (kind && kind !== 'any') params.kind = kind;
           await fetchPhrase('/yes', params, yesPhrase);
           const url = new URL(window.location.href);
           url.searchParams.set('tab', 'yes');
-          if (kind && kind !== 'any') url.searchParams.set('yesKind', kind);
-          else url.searchParams.delete('yesKind');
+          if (kind && kind !== 'any') url.searchParams.set('kind', kind);
+          else url.searchParams.delete('kind');
           window.history.replaceState({}, '', url);
         });
 
@@ -145,24 +146,24 @@
           if (activeTab() !== 'no') return;
           event.preventDefault();
           const formData = new FormData(noForm);
-          const kind = formData.get('noKind');
+          const kind = formData.get('kind');
           const params = {};
           if (kind && kind !== 'any') params.kind = kind;
           await fetchPhrase('/no', params, noPhrase);
           const url = new URL(window.location.href);
           url.searchParams.set('tab', 'no');
-          if (kind && kind !== 'any') url.searchParams.set('noKind', kind);
-          else url.searchParams.delete('noKind');
+          if (kind && kind !== 'any') url.searchParams.set('kind', kind);
+          else url.searchParams.delete('kind');
           window.history.replaceState({}, '', url);
         });
 
         yesForm.addEventListener('change', (event) => {
-          if (event.target.name === 'yesKind' && activeTab() === 'yes') {
+          if (event.target.name === 'kind' && activeTab() === 'yes') {
             yesForm.requestSubmit();
           }
         });
         noForm.addEventListener('change', (event) => {
-          if (event.target.name === 'noKind' && activeTab() === 'no') {
+          if (event.target.name === 'kind' && activeTab() === 'no') {
             noForm.requestSubmit();
           }
         });

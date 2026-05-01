@@ -137,12 +137,11 @@ function createApp({ yesPhrases, noPhrases }) {
   });
 
   app.get('/', (req, res) => {
-    const yesKind = req.query.yesKind;
-    const noKind = req.query.noKind;
     const tab = req.query.tab === 'no' ? 'no' : 'yes';
+    const kind = req.query.kind;
 
-    const selectedYesKind = VALID_YES_KINDS.has(yesKind) ? yesKind : 'any';
-    const selectedNoKind = VALID_NO_KINDS.has(noKind) ? noKind : 'any';
+    const selectedYesKind = tab === 'yes' && VALID_YES_KINDS.has(kind) ? kind : 'any';
+    const selectedNoKind = tab === 'no' && VALID_NO_KINDS.has(kind) ? kind : 'any';
 
     const yesFiltered = selectedYesKind === 'any' ? yesPhrases : yesPhrases.filter((item) => item.kind === selectedYesKind);
     const noFiltered = selectedNoKind === 'any' ? noPhrases : noPhrases.filter((item) => item.kind === selectedNoKind);
