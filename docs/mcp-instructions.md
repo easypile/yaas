@@ -1,26 +1,52 @@
 # YAAS MCP Server Instructions
 
-Use this MCP server when you need a concise affirmative response that fits a tone or intent.
+Use this MCP server when you need concise, stylistically controlled affirmative (**yes-like**) or negative (**no-like**) phrasing.
 
 ## When to use it
 
-- You need a short **yes-like** reply for UX copy, bots, or playful prompts.
-- You want a specific tone category (agree, confirm, contradict, encourage).
-- You need deterministic validation for accepted tone categories.
+Use YAAS when you are producing:
 
-## How to use it
+- short UI copy,
+- conversational confirmations/refusals,
+- tone-varied responses for assistants, bots, and demo flows,
+- deterministic phrase generation constrained to known categories.
 
-1. Call the `get-yes` tool.
-2. Optionally provide `kind` with one of:
-   - `agree`
-   - `confirm`
-   - `contradict`
-   - `encourage`
-3. Omit `kind` to let the server choose from all available categories.
-4. If `kind` is invalid, expect an error response.
+## Available tools
 
-## Tool quick reference
+### `get-yes`
 
-- Tool: `get-yes`
-- Optional input: `{ "kind": "agree" }`
-- Output: `{ "kind": "agree", "text": "..." }`
+Returns one phrase from the **yes** library.
+
+- Optional argument: `kind`
+- Supported `kind` values:
+  - `agree`
+  - `confirm`
+  - `contradict`
+  - `encourage`
+
+### `get-no`
+
+Returns one phrase from the **no** library.
+
+- Optional argument: `kind`
+- Supported `kind` values:
+  - `refuse`
+  - `surprise`
+  - `reinforce`
+
+## Usage guidance
+
+1. Prefer providing `kind` when tone control matters.
+2. Omit `kind` to sample across all phrases for that polarity.
+3. Expect an error if `kind` is unsupported.
+4. Expect an error if a requested `kind` has no loaded phrases.
+
+## Response shape
+
+Tool responses return JSON text payloads in this form:
+
+```json
+{ "kind": "agree", "text": "Absolutely, I agree." }
+```
+
+Use `kind` for downstream routing/analytics and `text` for user-visible output.

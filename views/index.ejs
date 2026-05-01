@@ -45,16 +45,16 @@
       <form id="yes-form" method="GET" action="/">
         <fieldset>
           <div class="kinds">
-            <label><input type="radio" name="kind" value="any" {{CHECKED_ANY}} /> Any</label>
-            <label><input type="radio" name="kind" value="agree" {{CHECKED_AGREE}} /> Agree</label>
-            <label><input type="radio" name="kind" value="confirm" {{CHECKED_CONFIRM}} /> Confirm</label>
-            <label><input type="radio" name="kind" value="contradict" {{CHECKED_CONTRADICT}} /> Contradict</label>
-            <label><input type="radio" name="kind" value="encourage" {{CHECKED_ENCOURAGE}} /> Encourage</label>
+            <label><input type="radio" name="kind" value="any" <%= selectedKind === 'any' ? 'checked' : '' %> /> Any</label>
+            <label><input type="radio" name="kind" value="agree" <%= selectedKind === 'agree' ? 'checked' : '' %> /> Agree</label>
+            <label><input type="radio" name="kind" value="confirm" <%= selectedKind === 'confirm' ? 'checked' : '' %> /> Confirm</label>
+            <label><input type="radio" name="kind" value="contradict" <%= selectedKind === 'contradict' ? 'checked' : '' %> /> Contradict</label>
+            <label><input type="radio" name="kind" value="encourage" <%= selectedKind === 'encourage' ? 'checked' : '' %> /> Encourage</label>
           </div>
         </fieldset>
         <button type="submit" aria-label="Refresh phrase">&#x21bb; Refresh</button>
       </form>
-      <p id="phrase">{{PHRASE_PLACEHOLDER}}</p>
+      <p id="phrase"><%= phrase %></p>
     </main>
     <script>
       (() => {
