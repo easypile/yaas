@@ -1,7 +1,13 @@
-FROM node:22-alpine AS runtime
+FROM node:20-alpine AS runtime
 WORKDIR /app
 
-COPY package.json server.js template.html favicon.svg ./
+# Downgrade npm to avoid Alpine npm 10.x bugs
+RUN npm install -g npm@9
+
+COPY package.json package-lock.json ./
+RUN npm install --omit=dev
+
+COPY server.js template.html favicon.svg ./
 COPY data ./data
 COPY docs ./docs
 
