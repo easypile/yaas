@@ -119,6 +119,7 @@ test('MCP notifications/initialized with id returns error', async () => {
     assert.equal(res.status, 400);
     const body = await res.json();
     assert.equal(body.error.code, -32600);
+    assert.match(body.error.message, /must not include an id/);
   });
 });
 

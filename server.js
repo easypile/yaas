@@ -180,10 +180,11 @@ function handleMcpRequest(payload, phrases) {
   // Per JSON-RPC 2.0 spec, notifications must not have an id field
   if (payload.method && payload.method.startsWith('notifications/')) {
     if (Object.prototype.hasOwnProperty.call(payload, 'id')) {
-      return { status: 400, body: createJsonRpcError(null, -32600, 'Invalid Request') };
+      return { status: 400, body: createJsonRpcError(null, -32600, 'Notifications must not include an id field') };
     }
-    // Notification - no response expected
-    // Currently we accept all notifications without specific handling
+    // Accept all MCP notifications without specific handling.
+    // This supports notifications/initialized and future notification methods.
+    // Notifications do not expect a response per JSON-RPC 2.0 spec.
     return { status: 204, body: '' };
   }
 
