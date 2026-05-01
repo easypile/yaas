@@ -81,7 +81,7 @@ function createApp({ phrases }) {
       res.end(readFileSync('favicon.svg', 'utf8'));
       return;
     }
-
+    
     if (req.method === 'GET' && requestUrl.pathname === '/') {
       const selectedKind = VALID_KINDS.has(normalizedKind) ? normalizedKind : 'any';
       const filtered = selectedKind === 'any' ? phrases : phrases.filter((item) => item.kind === selectedKind);
