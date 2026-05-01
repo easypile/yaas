@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# CI/CD
+.github
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dependencies
+node_modules/
+
+# Testing
+coverage
+.nyc_output
+test/
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+*.md
+!README.md
+LICENSE
+.env*
+!.env.example
