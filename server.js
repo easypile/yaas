@@ -182,9 +182,21 @@ function handleMcpRequest(payload, phrases) {
 function createApp({ phrases }) {
   return createServer((req, res) => {
     const requestUrl = new URL(req.url, 'http://localhost');
+    const mcpCorsHeaders = {
+      'access-control-allow-origin': '*',
+      'access-control-allow-methods': 'POST, OPTIONS',
+      'access-control-allow-headers': 'content-type, mcp-session-id',
+      'access-control-max-age': '86400'
+    };
 
     const kindParam = requestUrl.searchParams.get('kind');
     const normalizedKind = kindParam === 'any' ? null : kindParam;
+
+    if (req.method === 'OPTIONS' && requestUrl.pathname === '/mcp') {
+      res.writeHead(204, mcpCorsHeaders);
+      res.end();
+      return;
+    }
 
     if (req.method === 'POST' && requestUrl.pathname === '/mcp') {
       let raw = '';
@@ -197,13 +209,13 @@ function createApp({ phrases }) {
         try {
           payload = JSON.parse(raw || '{}');
         } catch {
-          res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' });
+          res.writeHead(400, { ...mcpCorsHeaders, 'content-type': 'application/json; charset=utf-8' });
           res.end(createJsonRpcError(null, -32700, 'Parse error'));
           return;
         }
 
         const response = handleMcpRequest(payload, phrases);
-        res.writeHead(response.status, { 'content-type': 'application/json; charset=utf-8' });
+        res.writeHead(response.status, { ...mcpCorsHeaders, 'content-type': 'application/json; charset=utf-8' });
         res.end(response.body);
       });
       return;
