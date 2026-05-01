@@ -1,7 +1,8 @@
 FROM node:20-alpine AS runtime
 WORKDIR /app
 
-# Downgrade npm to avoid Alpine npm 10.x bugs
+# Downgrade npm to v9 to avoid npm 10.x crash on Alpine Linux
+# See: https://github.com/npm/cli/issues/4769
 RUN npm install -g npm@9
 
 COPY package.json package-lock.json ./
