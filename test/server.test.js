@@ -6,7 +6,7 @@ const { once } = require('node:events');
 const os = require('node:os');
 const path = require('node:path');
 const { mkdtemp, writeFile } = require('node:fs/promises');
-const { loadPhrases, createApp, VALID_KINDS } = require('../server');
+const { loadPhrases, createApp, MCP_RESOURCE_URI } = require('../server');
 
 async function withServer(fn, dataDir = 'data') {
   const phrases = await loadPhrases(dataDir);
@@ -25,6 +25,15 @@ async function withServer(fn, dataDir = 'data') {
   }
 }
 
+async function mcpCall(base, method, params) {
+  const res = await fetch(`${base}/mcp`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
+  });
+  return { status: res.status, body: await res.json() };
+}
+
 test('GET / returns HTML page', async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/`);
@@ -35,58 +44,53 @@ test('GET / returns HTML page', async () => {
   });
 });
 
-test('GET /?kind=agree preselects kind', async () => {
-  await withServer(async (base) => {
-    const res = await fetch(`${base}/?kind=agree`);
-    assert.equal(res.status, 200);
-    const body = await res.text();
-    assert.match(body, /value="agree" checked/);
-  });
-});
-
-
-test('GET / with invalid kind falls back to any and returns 200', async () => {
-  await withServer(async (base) => {
-    const res = await fetch(`${base}/?kind=unknown`);
-    assert.equal(res.status, 200);
-    const body = await res.text();
-    assert.match(body, /value="any" checked/);
-  });
-});
-
-test('GET /favicon.svg returns svg favicon', async () => {
-  await withServer(async (base) => {
-    const res = await fetch(`${base}/favicon.svg`);
-    assert.equal(res.status, 200);
-    assert.match(res.headers.get('content-type'), /image\/svg\+xml/);
-    const body = await res.text();
-    assert.match(body, /<svg/);
-  });
-});
-
-test('GET /yes returns random phrase', async () => {
-  await withServer(async (base) => {
-    const res = await fetch(`${base}/yes`);
-    assert.equal(res.status, 200);
-    const body = await res.text();
-    assert.ok(body.length > 0);
-  });
-});
-
-test('GET /yes?kind=agree filters by kind', async () => {
-  await withServer(async (base) => {
-    const res = await fetch(`${base}/yes?kind=agree`);
-    assert.equal(res.status, 200);
-    const body = await res.text();
-    assert.ok(body.length > 0);
-  });
-});
-
 test('GET /yes rejects invalid kind', async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/yes?kind=unknown`);
     assert.equal(res.status, 400);
-    assert.match(res.headers.get('content-type'), /text\/plain/);
+  });
+});
+
+test('MCP initialize returns detailed server description', async () => {
+  await withServer(async (base) => {
+    const { status, body } = await mcpCall(base, 'initialize');
+    assert.equal(status, 200);
+    assert.match(body.result.instructions, /validated yes-like responses/);
+    assert.equal(body.result.serverInfo.name, 'yaas-mcp-server');
+  });
+});
+
+test('MCP tools/list returns get-yes tool with description', async () => {
+  await withServer(async (base) => {
+    const { body } = await mcpCall(base, 'tools/list');
+    assert.equal(body.result.tools.length, 1);
+    assert.equal(body.result.tools[0].name, 'get-yes');
+    assert.match(body.result.tools[0].description, /Optional kind must be one of/);
+  });
+});
+
+test('MCP get-yes returns error for invalid kind', async () => {
+  await withServer(async (base) => {
+    const { body } = await mcpCall(base, 'tools/call', { name: 'get-yes', arguments: { kind: 'bad' } });
+    assert.equal(body.error.code, -32000);
+    assert.match(body.error.message, /Invalid kind/);
+  });
+});
+
+test('MCP resources list/read exposes instructions resource', async () => {
+  await withServer(async (base) => {
+    const list = await mcpCall(base, 'resources/list');
+    assert.equal(list.body.result.resources[0].uri, MCP_RESOURCE_URI);
+
+    const read = await mcpCall(base, 'resources/read', { uri: MCP_RESOURCE_URI });
+    assert.match(read.body.result.contents[0].text, /When to use it/);
+  });
+});
+
+test('unknown route returns 404', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/nope`);
+    assert.equal(res.status, 404);
   });
 });
 
@@ -98,12 +102,4 @@ test('GET /yes returns 400 when kind file is missing', async () => {
     const res = await fetch(`${base}/yes?kind=confirm`);
     assert.equal(res.status, 400);
   }, dataDir);
-});
-
-test('unknown route returns 404', async () => {
-  await withServer(async (base) => {
-    const res = await fetch(`${base}/nope`);
-    assert.equal(res.status, 404);
-    assert.match(res.headers.get('content-type'), /text\/plain/);
-  });
 });

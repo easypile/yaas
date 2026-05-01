@@ -9,8 +9,10 @@ const path = require('node:path');
 
 const DATA_DIR = process.env.YES_DATA_DIR || 'data';
 const VALID_KINDS = new Set(['agree', 'confirm', 'contradict', 'encourage']);
+const MCP_RESOURCE_URI = 'docs://yaas/mcp-instructions';
 
 const PAGE_TEMPLATE = readFileSync('template.html', 'utf8');
+const MCP_INSTRUCTIONS = readFileSync('docs/mcp-instructions.md', 'utf8');
 
 async function loadKindPhrases(dataDir = DATA_DIR, kind) {
   const filePath = path.join(dataDir, `${kind}.txt`);
@@ -48,6 +50,134 @@ function pickRandom(items) {
   return items[Math.floor(Math.random() * items.length)];
 }
 
+function createJsonRpcResponse(id, result) {
+  return JSON.stringify({ jsonrpc: '2.0', id, result });
+}
+
+function createJsonRpcError(id, code, message) {
+  return JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } });
+}
+
+function handleMcpRequest(payload, phrases) {
+  const id = Object.prototype.hasOwnProperty.call(payload, 'id') ? payload.id : null;
+
+  if (!payload || payload.jsonrpc !== '2.0' || typeof payload.method !== 'string') {
+    return { status: 400, body: createJsonRpcError(id, -32600, 'Invalid Request') };
+  }
+
+  if (payload.method === 'initialize') {
+    return {
+      status: 200,
+      body: createJsonRpcResponse(id, {
+        protocolVersion: '2024-11-05',
+        serverInfo: {
+          name: 'yaas-mcp-server',
+          version: '1.0.0'
+        },
+        instructions: 'Use this server when you need validated yes-like responses. Prefer get-yes with an optional kind. See the instruction resource for usage details.',
+        capabilities: {
+          tools: {},
+          resources: {}
+        }
+      })
+    };
+  }
+
+  if (payload.method === 'tools/list') {
+    return {
+      status: 200,
+      body: createJsonRpcResponse(id, {
+        tools: [
+          {
+            name: 'get-yes',
+            title: 'Get Yes Phrase',
+            description: 'Returns a yes-like phrase from the YAAS phrase library. Use this when you need short affirmative or supportive language. Optional kind must be one of: agree, confirm, contradict, encourage. Returns an error for unsupported kind values.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                kind: {
+                  type: 'string',
+                  description: 'Optional phrase category. Supported values: agree, confirm, contradict, encourage.'
+                }
+              },
+              additionalProperties: false
+            }
+          }
+        ]
+      })
+    };
+  }
+
+  if (payload.method === 'tools/call') {
+    const params = payload.params || {};
+    const args = params.arguments || {};
+    if (params.name !== 'get-yes') {
+      return { status: 200, body: createJsonRpcError(id, -32601, 'Tool not found') };
+    }
+
+    const kind = args.kind;
+    if (kind != null && !VALID_KINDS.has(kind)) {
+      return { status: 200, body: createJsonRpcError(id, -32000, `Invalid kind: ${kind}`) };
+    }
+
+    const filtered = kind ? phrases.filter((item) => item.kind === kind) : phrases;
+    if (filtered.length === 0) {
+      return { status: 200, body: createJsonRpcError(id, -32001, 'No phrases available for requested kind') };
+    }
+
+    const phrase = pickRandom(filtered);
+    return {
+      status: 200,
+      body: createJsonRpcResponse(id, {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ kind: phrase.kind, text: phrase.text })
+          }
+        ]
+      })
+    };
+  }
+
+  if (payload.method === 'resources/list') {
+    return {
+      status: 200,
+      body: createJsonRpcResponse(id, {
+        resources: [
+          {
+            uri: MCP_RESOURCE_URI,
+            name: 'YAAS MCP Usage Instructions',
+            description: 'Guidance explaining when to use this MCP server and how to call get-yes effectively.',
+            mimeType: 'text/markdown'
+          }
+        ]
+      })
+    };
+  }
+
+  if (payload.method === 'resources/read') {
+    const params = payload.params || {};
+    if (params.uri !== MCP_RESOURCE_URI) {
+      return { status: 200, body: createJsonRpcError(id, -32002, 'Resource not found') };
+    }
+
+    return {
+      status: 200,
+      body: createJsonRpcResponse(id, {
+        contents: [
+          {
+            uri: MCP_RESOURCE_URI,
+            mimeType: 'text/markdown',
+            text: MCP_INSTRUCTIONS
+          }
+        ]
+      })
+    };
+  }
+
+  return { status: 200, body: createJsonRpcError(id, -32601, 'Method not found') };
+}
+
 function createApp({ phrases }) {
   return createServer((req, res) => {
     const requestUrl = new URL(req.url, 'http://localhost');
@@ -55,21 +185,41 @@ function createApp({ phrases }) {
     const kindParam = requestUrl.searchParams.get('kind');
     const normalizedKind = kindParam === 'any' ? null : kindParam;
 
+    if (req.method === 'POST' && requestUrl.pathname === '/mcp') {
+      let raw = '';
+      req.setEncoding('utf8');
+      req.on('data', (chunk) => {
+        raw += chunk;
+      });
+      req.on('end', () => {
+        let payload;
+        try {
+          payload = JSON.parse(raw || '{}');
+        } catch {
+          res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' });
+          res.end(createJsonRpcError(null, -32700, 'Parse error'));
+          return;
+        }
+
+        const response = handleMcpRequest(payload, phrases);
+        res.writeHead(response.status, { 'content-type': 'application/json; charset=utf-8' });
+        res.end(response.body);
+      });
+      return;
+    }
+
     if (req.method === 'GET' && requestUrl.pathname === '/yes') {
       if (normalizedKind && !VALID_KINDS.has(normalizedKind)) {
         res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
         res.end('Invalid kind');
         return;
       }
-
       const filtered = normalizedKind ? phrases.filter((item) => item.kind === normalizedKind) : phrases;
-
       if (normalizedKind && filtered.length === 0) {
         res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
         res.end('Kind file is not accessible');
         return;
       }
-
       const phrase = pickRandom(filtered);
       res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
       res.end(phrase.text);
@@ -81,7 +231,7 @@ function createApp({ phrases }) {
       res.end(readFileSync('favicon.svg', 'utf8'));
       return;
     }
-    
+
     if (req.method === 'GET' && requestUrl.pathname === '/') {
       const selectedKind = VALID_KINDS.has(normalizedKind) ? normalizedKind : 'any';
       const filtered = selectedKind === 'any' ? phrases : phrases.filter((item) => item.kind === selectedKind);
@@ -109,15 +259,17 @@ async function start() {
   const server = createApp({ phrases });
 
   server.listen(port, () => {
-    process.stdout.write(`Server listening on :${port}\n`);
+    process.stdout.write(`Server listening on :${port}
+`);
   });
 }
 
 if (require.main === module) {
   start().catch((error) => {
-    process.stderr.write(`${error.stack || error}\n`);
+    process.stderr.write(`${error.stack || error}
+`);
     process.exitCode = 1;
   });
 }
 
-module.exports = { loadPhrases, loadKindPhrases, createApp, VALID_KINDS };
+module.exports = { loadPhrases, loadKindPhrases, createApp, VALID_KINDS, handleMcpRequest, MCP_RESOURCE_URI };
