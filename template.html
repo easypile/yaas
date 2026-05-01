@@ -75,8 +75,8 @@
             return;
           }
 
-          const payload = await response.json();
-          phraseNode.textContent = payload.text;
+          const text = await response.text();
+          phraseNode.textContent = text;
 
           const url = new URL(window.location.href);
           if (kind && kind !== 'any') {

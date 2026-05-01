@@ -60,8 +60,8 @@ function createApp({ phrases }) {
 
       const filtered = normalizedKind ? phrases.filter((item) => item.kind === normalizedKind) : phrases;
       const phrase = pickRandom(filtered);
-      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify(phrase));
+      res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+      res.end(phrase.text);
       return;
     }
 
