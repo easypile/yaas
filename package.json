@@ -1,0 +1,11 @@
+{
+  "name": "yaas",
+  "version": "1.0.0",
+  "description": "Simple polite yes API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "license": "MIT"
+}
