@@ -57,7 +57,7 @@ function createApp({ phrases }) {
 
     if (req.method === 'GET' && requestUrl.pathname === '/yes') {
       if (normalizedKind && !VALID_KINDS.has(normalizedKind)) {
-        res.writeHead(400, { 'content-type': 'plain/text; charset=utf-8' });
+        res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
         res.end('Invalid kind');
         return;
       }
@@ -65,7 +65,7 @@ function createApp({ phrases }) {
       const filtered = normalizedKind ? phrases.filter((item) => item.kind === normalizedKind) : phrases;
 
       if (normalizedKind && filtered.length === 0) {
-        res.writeHead(400, { 'content-type': 'plain/text; charset=utf-8' });
+        res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
         res.end('Kind file is not accessible');
         return;
       }
@@ -98,7 +98,7 @@ function createApp({ phrases }) {
       return;
     }
 
-    res.writeHead(404, { 'content-type': 'plain/text; charset=utf-8' });
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
     res.end('Not Found');
   });
 }
