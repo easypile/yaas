@@ -121,6 +121,10 @@ function createApp({ phrases }) {
     }
 
     if (req.method === 'POST' && requestUrl.pathname === '/mcp') {
+      for (const [header, value] of Object.entries(mcpCorsHeaders)) {
+        res.setHeader(header, value);
+      }
+
       let raw = '';
       req.setEncoding('utf8');
       req.on('data', (chunk) => {
