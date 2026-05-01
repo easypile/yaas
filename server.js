@@ -7,12 +7,13 @@ const { createInterface } = require('node:readline');
 const { URL } = require('node:url');
 const path = require('node:path');
 
-const DATA_DIR = process.env.YES_DATA_DIR || 'data';
+const BASE_DIR = __dirname;
+const DATA_DIR = process.env.YES_DATA_DIR || path.join(BASE_DIR, 'data');
 const VALID_KINDS = new Set(['agree', 'confirm', 'contradict', 'encourage']);
 const MCP_RESOURCE_URI = 'docs://yaas/mcp-instructions';
 
-const PAGE_TEMPLATE = readFileSync('template.html', 'utf8');
-const MCP_INSTRUCTIONS = readFileSync('docs/mcp-instructions.md', 'utf8');
+const PAGE_TEMPLATE = readFileSync(path.join(BASE_DIR, 'template.html'), 'utf8');
+const MCP_INSTRUCTIONS = readFileSync(path.join(BASE_DIR, 'docs/mcp-instructions.md'), 'utf8');
 
 async function loadKindPhrases(dataDir = DATA_DIR, kind) {
   const filePath = path.join(dataDir, `${kind}.txt`);
@@ -228,7 +229,7 @@ function createApp({ phrases }) {
 
     if (req.method === 'GET' && requestUrl.pathname === '/favicon.svg') {
       res.writeHead(200, { 'content-type': 'image/svg+xml; charset=utf-8' });
-      res.end(readFileSync('favicon.svg', 'utf8'));
+      res.end(readFileSync(path.join(BASE_DIR, 'favicon.svg'), 'utf8'));
       return;
     }
 
