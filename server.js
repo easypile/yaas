@@ -197,7 +197,7 @@ function createApp({ phrases }) {
     const mcpCorsHeaders = {
       'access-control-allow-origin': '*',
       'access-control-allow-methods': 'POST, OPTIONS',
-      'access-control-allow-headers': 'content-type, mcp-session-id',
+      'access-control-allow-headers': 'content-type, mcp-session-id, mcp-protocol-version',
       'access-control-max-age': '86400'
     };
 
