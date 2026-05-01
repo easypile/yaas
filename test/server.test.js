@@ -26,13 +26,13 @@ async function mcpCall(base, method, params) {
   return { status: res.status, headers: res.headers, body: await res.json() };
 }
 
-test('GET / returns tabbed page with no inline JS and fonts preconnect', async () => {
+test('GET / returns tabbed page with progressive-enhancement JS and fonts preconnect', async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/`);
     const html = await res.text();
     assert.equal(res.status, 200);
     assert.match(html, /<style>/);
-    assert.doesNotMatch(html, /<script>/);
+    assert.match(html, /<script>/);
     assert.match(html, /Yes as a service/);
     assert.match(html, /No as a service/);
     assert.match(html, /Refresh yes phrase/);

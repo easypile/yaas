@@ -105,5 +105,66 @@
         </div>
       </section>
     </main>
+
+    <script>
+      (() => {
+        const yesForm = document.querySelector('.panel-yes form');
+        const noForm = document.querySelector('.panel-no form');
+        const yesPhrase = document.querySelector('.panel-yes .phrase');
+        const noPhrase = document.querySelector('.panel-no .phrase');
+        const yesTab = document.getElementById('tab-yes');
+        const noTab = document.getElementById('tab-no');
+
+        const fetchPhrase = async (endpoint, params, phraseNode) => {
+          const query = new URLSearchParams(params);
+          const response = await fetch(`${endpoint}?${query.toString()}`);
+          if (!response.ok) return;
+          phraseNode.textContent = await response.text();
+        };
+
+        const activeTab = () => (noTab.checked ? 'no' : 'yes');
+
+        yesForm.addEventListener('submit', async (event) => {
+          if (activeTab() !== 'yes') return;
+          event.preventDefault();
+          const formData = new FormData(yesForm);
+          const kind = formData.get('yesKind');
+          const params = {};
+          if (kind && kind !== 'any') params.kind = kind;
+          await fetchPhrase('/yes', params, yesPhrase);
+          const url = new URL(window.location.href);
+          url.searchParams.set('tab', 'yes');
+          if (kind && kind !== 'any') url.searchParams.set('yesKind', kind);
+          else url.searchParams.delete('yesKind');
+          window.history.replaceState({}, '', url);
+        });
+
+        noForm.addEventListener('submit', async (event) => {
+          if (activeTab() !== 'no') return;
+          event.preventDefault();
+          const formData = new FormData(noForm);
+          const kind = formData.get('noKind');
+          const params = {};
+          if (kind && kind !== 'any') params.kind = kind;
+          await fetchPhrase('/no', params, noPhrase);
+          const url = new URL(window.location.href);
+          url.searchParams.set('tab', 'no');
+          if (kind && kind !== 'any') url.searchParams.set('noKind', kind);
+          else url.searchParams.delete('noKind');
+          window.history.replaceState({}, '', url);
+        });
+
+        yesForm.addEventListener('change', (event) => {
+          if (event.target.name === 'yesKind' && activeTab() === 'yes') {
+            yesForm.requestSubmit();
+          }
+        });
+        noForm.addEventListener('change', (event) => {
+          if (event.target.name === 'noKind' && activeTab() === 'no') {
+            noForm.requestSubmit();
+          }
+        });
+      })();
+    </script>
   </body>
 </html>
