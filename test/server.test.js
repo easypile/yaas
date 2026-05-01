@@ -22,6 +22,34 @@ async function withServer(fn) {
   }
 }
 
+test('GET / returns HTML page', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/`);
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type'), /text\/html/);
+    const body = await res.text();
+    assert.match(body, /Yes as a service/);
+  });
+});
+
+test('GET /?kind=agree preselects kind', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/?kind=agree`);
+    assert.equal(res.status, 200);
+    const body = await res.text();
+    assert.match(body, /value="agree" checked/);
+  });
+});
+
+
+test('GET / with invalid kind falls back to any and returns 200', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/?kind=unknown`);
+    assert.equal(res.status, 200);
+    const body = await res.text();
+    assert.match(body, /value="any" checked/);
+  });
+});
 test('GET /yes returns random phrase', async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/yes`);
