@@ -53,8 +53,8 @@ function createApp({ phrases }) {
 
     if (req.method === 'GET' && requestUrl.pathname === '/yes') {
       if (normalizedKind && !VALID_KINDS.has(normalizedKind)) {
-        res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: 'Invalid kind' }));
+        res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
+        res.end('Invalid kind');
         return;
       }
 
@@ -81,8 +81,8 @@ function createApp({ phrases }) {
       return;
     }
 
-    res.writeHead(404, { 'content-type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ error: 'Not Found' }));
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end('Not Found');
   });
 }
 
