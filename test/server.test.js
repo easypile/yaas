@@ -87,6 +87,15 @@ test('MCP resources list/read exposes instructions resource', async () => {
   });
 });
 
+test('MCP endpoint handles CORS preflight', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/mcp`, { method: 'OPTIONS' });
+    assert.equal(res.status, 204);
+    assert.equal(res.headers.get('access-control-allow-origin'), '*');
+    assert.match(res.headers.get('access-control-allow-methods') || '', /POST/);
+  });
+});
+
 test('unknown route returns 404', async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/nope`);
