@@ -5,35 +5,39 @@ const { createReadStream, readFileSync } = require('node:fs');
 const { access } = require('node:fs/promises');
 const { createInterface } = require('node:readline');
 const { URL } = require('node:url');
+const path = require('node:path');
 
-const DATA_FILE = process.env.YES_DATA_FILE || 'data/yes.yaml';
+const DATA_DIR = process.env.YES_DATA_DIR || 'data';
 const VALID_KINDS = new Set(['agree', 'confirm', 'contradict', 'encourage']);
 
 const PAGE_TEMPLATE = readFileSync('template.html', 'utf8');
 
-
-
-async function loadPhrases(filePath = DATA_FILE) {
+async function loadKindPhrases(dataDir = DATA_DIR, kind) {
+  const filePath = path.join(dataDir, `${kind}.txt`);
   await access(filePath);
 
   const stream = createReadStream(filePath, { encoding: 'utf8' });
   const rl = createInterface({ input: stream, crlfDelay: Infinity });
 
   const phrases = [];
-  let current = null;
-
   for await (const line of rl) {
-    const kindMatch = line.match(/^\s*- kind:\s*(\w+)\s*$/);
-    if (kindMatch) {
-      current = { kind: kindMatch[1] };
-      continue;
+    const text = line.trim();
+    if (text) {
+      phrases.push({ kind, text });
     }
+  }
 
-    const textMatch = line.match(/^\s*text:\s*"(.*)"\s*$/);
-    if (textMatch && current) {
-      current.text = textMatch[1].replace(/\\"/g, '"');
-      phrases.push(current);
-      current = null;
+  return phrases;
+}
+
+async function loadPhrases(dataDir = DATA_DIR) {
+  const phrases = [];
+  for (const kind of VALID_KINDS) {
+    try {
+      const kindPhrases = await loadKindPhrases(dataDir, kind);
+      phrases.push(...kindPhrases);
+    } catch {
+      // Ignore missing/unreadable kind files during startup; handled per-request.
     }
   }
 
@@ -59,6 +63,13 @@ function createApp({ phrases }) {
       }
 
       const filtered = normalizedKind ? phrases.filter((item) => item.kind === normalizedKind) : phrases;
+
+      if (normalizedKind && filtered.length === 0) {
+        res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
+        res.end('Kind file is not accessible');
+        return;
+      }
+
       const phrase = pickRandom(filtered);
       res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
       res.end(phrase.text);
@@ -103,4 +114,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { loadPhrases, createApp, VALID_KINDS };
+module.exports = { loadPhrases, loadKindPhrases, createApp, VALID_KINDS };
