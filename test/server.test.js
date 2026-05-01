@@ -103,6 +103,32 @@ test('MCP endpoint handles CORS preflight', async () => {
   });
 });
 
+test('MCP endpoint includes CORS headers on POST responses', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/mcp`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'accept': 'application/json, text/event-stream'
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: { name: 'test', version: '1.0.0' }
+        }
+      })
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('access-control-allow-origin'), '*');
+    assert.match(res.headers.get('access-control-allow-methods') || '', /POST/);
+    assert.match(res.headers.get('access-control-allow-headers') || '', /mcp-session-id/);
+  });
+});
+
 test('MCP notifications/initialized returns no content', async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/mcp`, {
