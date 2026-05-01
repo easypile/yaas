@@ -176,6 +176,11 @@ function handleMcpRequest(payload, phrases) {
     };
   }
 
+  if (payload.method === 'notifications/initialized') {
+    // Notification - no response expected (id is null for notifications)
+    return { status: 204, body: '' };
+  }
+
   return { status: 200, body: createJsonRpcError(id, -32601, 'Method not found') };
 }
 

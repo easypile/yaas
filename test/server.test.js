@@ -96,6 +96,19 @@ test('MCP endpoint handles CORS preflight', async () => {
   });
 });
 
+test('MCP notifications/initialized returns no content', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })
+    });
+    assert.equal(res.status, 204);
+    const body = await res.text();
+    assert.equal(body, '');
+  });
+});
+
 test('unknown route returns 404', async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/nope`);
