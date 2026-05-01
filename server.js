@@ -134,18 +134,23 @@ function createApp({ phrases }) {
           parsedBody = null;
         }
 
+        // A new server and transport are created per request so that concurrent
+        // stateless requests do not share transport state.
         const mcpServer = createMcpServer(phrases);
         const transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: undefined,
           enableJsonResponse: true
         });
 
-        await mcpServer.connect(transport);
-        await transport.handleRequest(req, res, parsedBody);
+        // Register cleanup before handling the request to avoid a race where
+        // the response finishes before the close handler is attached.
         res.on('close', () => {
           transport.close();
           mcpServer.close();
         });
+
+        await mcpServer.connect(transport);
+        await transport.handleRequest(req, res, parsedBody);
       });
       return;
     }
