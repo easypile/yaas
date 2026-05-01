@@ -1,7 +1,7 @@
 FROM node:22-alpine AS runtime
 WORKDIR /app
 
-COPY package.json server.js ./
+COPY package.json server.js template.html favicon.svg ./
 COPY data ./data
 
 ENV NODE_ENV=production
