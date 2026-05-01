@@ -177,7 +177,11 @@ function handleMcpRequest(payload, phrases) {
   }
 
   if (payload.method === 'notifications/initialized') {
-    // Notification - no response expected (id is null for notifications)
+    // Per JSON-RPC 2.0 spec, notifications must not have an id field
+    if (Object.prototype.hasOwnProperty.call(payload, 'id')) {
+      return { status: 400, body: createJsonRpcError(null, -32600, 'Invalid Request') };
+    }
+    // Notification - no response expected
     return { status: 204, body: '' };
   }
 
