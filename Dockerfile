@@ -1,4 +1,4 @@
-# Use Node.js 24 LTS (Krypton) - latest LTS version
+# Use Node.js 24 LTS - latest LTS version
 # Using slim (Debian-based) instead of Alpine due to npm compatibility issues
 # See: https://github.com/npm/cli/issues/4769
 FROM node:24-slim AS base
