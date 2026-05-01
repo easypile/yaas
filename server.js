@@ -76,6 +76,12 @@ function createApp({ phrases }) {
       return;
     }
 
+    if (req.method === 'GET' && requestUrl.pathname === '/favicon.svg') {
+      res.writeHead(200, { 'content-type': 'image/svg+xml; charset=utf-8' });
+      res.end(readFileSync('favicon.svg', 'utf8'));
+      return;
+    }
+
     if (req.method === 'GET' && requestUrl.pathname === '/') {
       const selectedKind = VALID_KINDS.has(normalizedKind) ? normalizedKind : 'any';
       const filtered = selectedKind === 'any' ? phrases : phrases.filter((item) => item.kind === selectedKind);

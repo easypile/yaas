@@ -53,6 +53,17 @@ test('GET / with invalid kind falls back to any and returns 200', async () => {
     assert.match(body, /value="any" checked/);
   });
 });
+
+test('GET /favicon.svg returns svg favicon', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/favicon.svg`);
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type'), /image\/svg\+xml/);
+    const body = await res.text();
+    assert.match(body, /<svg/);
+  });
+});
+
 test('GET /yes returns random phrase', async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/yes`);
@@ -75,6 +86,7 @@ test('GET /yes rejects invalid kind', async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/yes?kind=unknown`);
     assert.equal(res.status, 400);
+    assert.match(res.headers.get('content-type'), /text\/plain/);
   });
 });
 
@@ -92,5 +104,6 @@ test('unknown route returns 404', async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/nope`);
     assert.equal(res.status, 404);
+    assert.match(res.headers.get('content-type'), /text\/plain/);
   });
 });
