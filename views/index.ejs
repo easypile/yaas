@@ -21,9 +21,9 @@
         background: #f8f8f8;
       }
       main { text-align: center; padding: 1.5rem; width: min(760px, 95vw); }
-      h1 { margin: 0 0 1rem; font-size: 1.8rem; }
+      h1 { margin: 0 0 2rem; font-size: 1.8rem; }
       fieldset { margin: 0; padding: 0; border: 0; }
-      .kinds { display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: center; margin-bottom: 0.9rem; }
+      .kinds { display: grid; grid-auto-columns: auto; grid-template-columns: auto auto; text-align: left; margin-bottom: 2rem; }
       label { font-size: 0.95rem; }
       button {
         border: 1px solid #ccc;
@@ -36,7 +36,9 @@
 
       .tabs { margin-top: 1rem; }
       .tab-input { position: absolute; opacity: 0; pointer-events: none; }
-      .tab-labels { display: inline-flex; gap: 0.4rem; margin-bottom: 1rem; }
+      .tab-labels { display: inline-flex; gap: 0; margin-bottom: 1rem; }
+      .tab-labels label[for="tab-yes"] { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+      .tab-labels label[for="tab-no"] { border-top-left-radius: 0; border-bottom-left-radius: 0; }
       .tab-label {
         border: 1px solid #ccc;
         border-radius: 999px;
@@ -59,7 +61,7 @@
   </head>
   <body>
     <main>
-      <h1>Yes as a service</h1>
+      <h1>yaas.</h1>
       <section class="tabs">
         <input class="tab-input" type="radio" name="service-tab" id="tab-yes" <%= activeTab === 'yes' ? 'checked' : '' %> />
         <input class="tab-input" type="radio" name="service-tab" id="tab-no" <%= activeTab === 'no' ? 'checked' : '' %> />
@@ -82,9 +84,9 @@
                   <label><input type="radio" name="yesKind" value="encourage" <%= selectedYesKind === 'encourage' ? 'checked' : '' %> /> Encourage</label>
                 </div>
               </fieldset>
+              <p class="phrase"><%= yesPhrase %></p>
               <button type="submit" aria-label="Refresh yes phrase">&#x21bb; Refresh</button>
             </form>
-            <p class="phrase"><%= yesPhrase %></p>
           </section>
 
           <section class="tab-panel panel-no" role="tabpanel">
@@ -98,9 +100,9 @@
                   <label><input type="radio" name="noKind" value="reinforce" <%= selectedNoKind === 'reinforce' ? 'checked' : '' %> /> Reinforce</label>
                 </div>
               </fieldset>
+              <p class="phrase"><%= noPhrase %></p>
               <button type="submit" aria-label="Refresh no phrase">&#x21bb; Refresh</button>
             </form>
-            <p class="phrase"><%= noPhrase %></p>
           </section>
         </div>
       </section>
