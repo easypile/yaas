@@ -1,71 +1,78 @@
-# YAAS — Yes as a Service
+# YAAS — Yes (and No) as a Service
 
-YAAS is a tiny Node.js service that returns short affirmative phrases.
+YAAS is a small Express service that returns short affirmative and negative phrases.
 It includes:
 
-- a plain text API endpoint (`/yes`),
-- a simple web UI (`/`), and
-- an MCP-compatible JSON-RPC endpoint (`/mcp`) exposing a `get-yes` tool.
-
-The project is intentionally lightweight and file-based, making it easy to run locally and adapt for demos, testing, or assistant integrations.
+- plain text REST endpoints (`/yes`, `/no`),
+- a browser UI (`/`) rendered by EJS, and
+- an MCP JSON-RPC endpoint (`/mcp`) exposing `get-yes` and `get-no` tools.
 
 ## Features
 
-- Random yes-like phrase responses from curated categories.
-- Phrase categories (`kind`): `agree`, `confirm`, `contradict`, `encourage`.
-- Browser page for one-click phrase generation.
-- MCP server support for tool and resource discovery.
-- No external runtime dependencies.
+- Phrase categories for both yes and no responses.
+- Lightweight file-based phrase storage.
+- Compression middleware for HTTP responses.
+- CORS handling for MCP endpoint.
+- Health/readiness endpoints for platform integration.
+- Graceful shutdown on `SIGINT` and `SIGTERM`.
 
 ## Project Structure
 
 ```text
 .
 ├── data/
-│   ├── agree.txt
-│   ├── confirm.txt
-│   ├── contradict.txt
-│   └── encourage.txt
+│   ├── yes/
+│   │   ├── agree.txt
+│   │   ├── confirm.txt
+│   │   ├── contradict.txt
+│   │   └── encourage.txt
+│   └── no/
+│       ├── refuse.txt
+│       ├── surprise.txt
+│       └── reinforce.txt
 ├── docs/
 │   └── mcp-instructions.md
+├── public/
+│   └── favicon.svg
+├── views/
+│   └── index.ejs
 ├── test/
 │   └── server.test.js
 ├── server.js
-├── template.html
-├── favicon.svg
 ├── package.json
-├── Dockerfile
-└── README.md
+└── Dockerfile
 ```
 
 ## Requirements
 
-- Node.js 18+ (recommended)
+- Node.js 18+ (Node 20+ recommended)
 
 ## Getting Started
 
 ### 1) Install dependencies
 
-This project currently uses only Node built-ins, so install is usually optional, but you can still run:
-
 ```bash
 npm install
 ```
 
-### 2) Run the server
+### 2) Run tests
+
+```bash
+npm test
+```
+
+### 3) Start the server
 
 ```bash
 npm start
 ```
 
-By default, YAAS listens on port `3000`.
+By default YAAS listens on port `3000`.
 
 ## Configuration
 
-Environment variables:
-
 - `PORT` — HTTP port (default: `3000`)
-- `YES_DATA_DIR` — directory containing phrase files (default: `./data`)
+- `YES_DATA_DIR` — root directory that contains `yes/` and `no/` folders (default: `./data`)
 
 Example:
 
@@ -75,80 +82,53 @@ PORT=8080 YES_DATA_DIR=./data npm start
 
 ## API Reference
 
-### GET `/yes`
+### `GET /yes`
 
-Returns a plain text phrase.
+Returns one yes-like phrase as plain text.
 
-#### Query parameters
+- Optional query: `kind`
+- `kind` values: `agree`, `confirm`, `contradict`, `encourage`
+- `kind=any` or omitted = choose from all yes kinds
 
-- `kind` *(optional)*: `agree`, `confirm`, `contradict`, `encourage`
-- `kind=any` or omitted: choose from all categories
+### `GET /no`
 
-#### Examples
+Returns one no-like phrase as plain text.
 
-```bash
-curl "http://localhost:3000/yes"
-curl "http://localhost:3000/yes?kind=encourage"
-```
+- Optional query: `kind`
+- `kind` values: `refuse`, `surprise`, `reinforce`
+- `kind=any` or omitted = choose from all no kinds
 
-#### Error behavior
+### `GET /`
 
-- `400 Invalid kind` when `kind` is unsupported.
-- `400 Kind file is not accessible` when a specific kind has no available phrases.
+Serves the browser UI.
 
-### GET `/`
+### `GET /healthz`
 
-Serves a minimal HTML interface that displays a random phrase and allows filtering by category.
+Liveness probe endpoint.
 
-### POST `/mcp`
+### `GET /readyz`
 
-MCP-style JSON-RPC endpoint.
+Readiness probe endpoint.
 
-Supported methods:
+### `POST /mcp`
+
+MCP JSON-RPC endpoint supporting:
 
 - `initialize`
 - `tools/list`
-- `tools/call` (tool: `get-yes`)
+- `tools/call` (`get-yes`, `get-no`)
 - `resources/list`
 - `resources/read`
 
-#### `tools/call` example
+## Static and Middleware
 
-```bash
-curl -X POST "http://localhost:3000/mcp" \
-  -H "content-type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "tools/call",
-    "params": {
-      "name": "get-yes",
-      "arguments": { "kind": "agree" }
-    }
-  }'
-```
-
-## Phrase Data Format
-
-Each file in `data/` should contain one phrase per line. Empty lines are ignored.
-
-Example (`data/agree.txt`):
-
-```text
-Absolutely.
-Yes, I agree.
-That makes sense to me.
-```
+- `express.static` serves `/favicon.svg` from `public/favicon.svg`.
+- `compression()` is enabled globally.
+- `cors()` is applied to `/mcp` with MCP-related headers allowed.
 
 ## Development
 
-Run tests:
-
-```bash
-npm test
-```
-
-Start directly with Node:
+Run directly:
 
 ```bash
 node server.js
@@ -156,22 +136,17 @@ node server.js
 
 ## Docker
 
-Build image:
+Build:
 
 ```bash
 docker build -t yaas .
 ```
 
-Run container:
+Run:
 
 ```bash
 docker run --rm -p 3000:3000 yaas
 ```
-
-## Security Notes
-
-- Input handling is intentionally simple and best suited for trusted/internal usage.
-- If exposing publicly, consider adding request size limits, rate limiting, and structured logging.
 
 ## License
 

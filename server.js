@@ -1,31 +1,33 @@
-'use strict';
+import { createReadStream, readFileSync } from 'node:fs';
+import { access } from 'node:fs/promises';
+import { createInterface } from 'node:readline';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import http from 'node:http';
 
-const { createServer } = require('node:http');
-const { createReadStream, readFileSync } = require('node:fs');
-const { access } = require('node:fs/promises');
-const { createInterface } = require('node:readline');
-const { URL } = require('node:url');
-const path = require('node:path');
+import express from 'express';
+import cors from 'cors';
+import compression from 'compression';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { z } from 'zod';
 
-const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
-const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
-const { z } = require('zod');
-
-const BASE_DIR = __dirname;
+const __filename = fileURLToPath(import.meta.url);
+const BASE_DIR = path.dirname(__filename);
 const DATA_DIR = process.env.YES_DATA_DIR || path.join(BASE_DIR, 'data');
-const VALID_KINDS = new Set(['agree', 'confirm', 'contradict', 'encourage']);
+const YES_DIR = path.join(DATA_DIR, 'yes');
+const NO_DIR = path.join(DATA_DIR, 'no');
+const VALID_YES_KINDS = new Set(['agree', 'confirm', 'contradict', 'encourage']);
+const VALID_NO_KINDS = new Set(['refuse', 'surprise', 'reinforce']);
 const MCP_RESOURCE_URI = 'docs://yaas/mcp-instructions';
 
-const PAGE_TEMPLATE = readFileSync(path.join(BASE_DIR, 'template.html'), 'utf8');
 const MCP_INSTRUCTIONS = readFileSync(path.join(BASE_DIR, 'docs/mcp-instructions.md'), 'utf8');
 
-async function loadKindPhrases(dataDir = DATA_DIR, kind) {
+async function loadKindPhrases(dataDir, kind) {
   const filePath = path.join(dataDir, `${kind}.txt`);
   await access(filePath);
-
   const stream = createReadStream(filePath, { encoding: 'utf8' });
   const rl = createInterface({ input: stream, crlfDelay: Infinity });
-
   const phrases = [];
   for await (const line of rl) {
     const text = line.trim();
@@ -33,21 +35,19 @@ async function loadKindPhrases(dataDir = DATA_DIR, kind) {
       phrases.push({ kind, text });
     }
   }
-
   return phrases;
 }
 
-async function loadPhrases(dataDir = DATA_DIR) {
+async function loadPhrases(dataDir, validKinds) {
   const phrases = [];
-  for (const kind of VALID_KINDS) {
+  for (const kind of validKinds) {
     try {
       const kindPhrases = await loadKindPhrases(dataDir, kind);
       phrases.push(...kindPhrases);
     } catch {
-      // Ignore missing/unreadable kind files during startup; handled per-request.
+      // Ignore missing files during startup; handled per request.
     }
   }
-
   return phrases;
 }
 
@@ -55,172 +55,135 @@ function pickRandom(items) {
   return items[Math.floor(Math.random() * items.length)];
 }
 
-function createMcpServer(phrases) {
-  const server = new McpServer(
-    { name: 'yaas-mcp-server', version: '1.0.0' },
-    {
-      capabilities: { tools: {}, resources: {} },
-      instructions: 'Use this server when you need validated yes-like responses. Prefer get-yes with an optional kind. See the instruction resource for usage details.'
-    }
-  );
+function createMcpServer(yesPhrases, noPhrases) {
+  const server = new McpServer({ name: 'yaas-mcp-server', version: '2.0.0' }, {
+    capabilities: { tools: {}, resources: {} },
+    instructions: 'Use this server when you need validated yes/no-like responses. Prefer get-yes or get-no with optional kind.'
+  });
 
   server.registerTool('get-yes', {
     title: 'Get Yes Phrase',
-    description: 'Returns a yes-like phrase from the YAAS phrase library. Use this when you need short affirmative or supportive language. Optional kind must be one of: agree, confirm, contradict, encourage. Returns an error for unsupported kind values.',
-    inputSchema: {
-      kind: z.string().optional().describe('Optional phrase category. Supported values: agree, confirm, contradict, encourage.')
-    }
+    description: 'Returns a yes-like phrase. Optional kind: agree, confirm, contradict, encourage.',
+    inputSchema: { kind: z.string().optional() }
   }, async ({ kind } = {}) => {
-    if (kind != null && !VALID_KINDS.has(kind)) {
-      throw new Error(`Invalid kind: ${kind}`);
-    }
-
-    const filtered = kind ? phrases.filter((item) => item.kind === kind) : phrases;
-    if (filtered.length === 0) {
-      throw new Error('No phrases available for requested kind');
-    }
-
+    if (kind != null && !VALID_YES_KINDS.has(kind)) throw new Error(`Invalid kind: ${kind}`);
+    const filtered = kind ? yesPhrases.filter((item) => item.kind === kind) : yesPhrases;
+    if (filtered.length === 0) throw new Error('No phrases available for requested kind');
     const phrase = pickRandom(filtered);
-    return {
-      content: [{ type: 'text', text: JSON.stringify({ kind: phrase.kind, text: phrase.text }) }]
-    };
+    return { content: [{ type: 'text', text: JSON.stringify({ kind: phrase.kind, text: phrase.text }) }] };
   });
 
-  server.registerResource(
-    'YAAS MCP Usage Instructions',
-    MCP_RESOURCE_URI,
-    {
-      description: 'Guidance explaining when to use this MCP server and how to call get-yes effectively.',
-      mimeType: 'text/markdown'
-    },
-    async () => ({
-      contents: [{ uri: MCP_RESOURCE_URI, mimeType: 'text/markdown', text: MCP_INSTRUCTIONS }]
-    })
-  );
+  server.registerTool('get-no', {
+    title: 'Get No Phrase',
+    description: 'Returns a no-like phrase. Optional kind: refuse, surprise, reinforce.',
+    inputSchema: { kind: z.string().optional() }
+  }, async ({ kind } = {}) => {
+    if (kind != null && !VALID_NO_KINDS.has(kind)) throw new Error(`Invalid kind: ${kind}`);
+    const filtered = kind ? noPhrases.filter((item) => item.kind === kind) : noPhrases;
+    if (filtered.length === 0) throw new Error('No phrases available for requested kind');
+    const phrase = pickRandom(filtered);
+    return { content: [{ type: 'text', text: JSON.stringify({ kind: phrase.kind, text: phrase.text }) }] };
+  });
+
+  server.registerResource('YAAS MCP Usage Instructions', MCP_RESOURCE_URI, {
+    description: 'Guidance explaining when to use this MCP server and how to call tools effectively.',
+    mimeType: 'text/markdown'
+  }, async () => ({
+    contents: [{ uri: MCP_RESOURCE_URI, mimeType: 'text/markdown', text: MCP_INSTRUCTIONS }]
+  }));
 
   return server;
 }
 
-function createApp({ phrases }) {
-  return createServer((req, res) => {
-    const requestUrl = new URL(req.url, 'http://localhost');
-    const mcpCorsHeaders = {
-      'access-control-allow-origin': '*',
-      'access-control-allow-methods': 'POST, OPTIONS',
-      'access-control-allow-headers': 'content-type, mcp-session-id, mcp-protocol-version',
-      'access-control-max-age': '86400'
-    };
+function createApp({ yesPhrases, noPhrases }) {
+  const app = express();
+  app.disable('x-powered-by');
+  app.set('view engine', 'ejs');
+  app.set('views', path.join(BASE_DIR, 'views'));
 
-    const kindParam = requestUrl.searchParams.get('kind');
-    const normalizedKind = kindParam === 'any' ? null : kindParam;
+  app.use(compression());
+  app.use('/public', express.static(path.join(BASE_DIR, 'public')));
+  app.use('/favicon.svg', express.static(path.join(BASE_DIR, 'public/favicon.svg')));
+  app.use('/mcp', cors({ origin: '*', methods: ['POST', 'OPTIONS'], allowedHeaders: ['content-type', 'mcp-session-id', 'mcp-protocol-version'] }));
 
-    if (req.method === 'OPTIONS' && requestUrl.pathname === '/mcp') {
-      res.writeHead(204, mcpCorsHeaders);
-      res.end();
-      return;
-    }
+  app.get('/healthz', (_req, res) => res.status(200).json({ status: 'ok' }));
+  app.get('/readyz', (_req, res) => res.status(200).json({ status: 'ready' }));
 
-    if (req.method === 'POST' && requestUrl.pathname === '/mcp') {
-      for (const [header, value] of Object.entries(mcpCorsHeaders)) {
-        res.setHeader(header, value);
-      }
-
-      let raw = '';
-      req.setEncoding('utf8');
-      req.on('data', (chunk) => {
-        raw += chunk;
-      });
-      req.on('end', async () => {
-        let parsedBody;
-        try {
-          parsedBody = JSON.parse(raw || '{}');
-        } catch {
-          parsedBody = null;
-        }
-
-        // A new server and transport are created per request so that concurrent
-        // stateless requests do not share transport state.
-        const mcpServer = createMcpServer(phrases);
-        const transport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: undefined,
-          enableJsonResponse: true
-        });
-
-        // Register cleanup before handling the request to avoid a race where
-        // the response finishes before the close handler is attached.
-        res.on('close', () => {
-          transport.close();
-          mcpServer.close();
-        });
-
-        await mcpServer.connect(transport);
-        await transport.handleRequest(req, res, parsedBody);
-      });
-      return;
-    }
-
-    if (req.method === 'GET' && requestUrl.pathname === '/yes') {
-      if (normalizedKind && !VALID_KINDS.has(normalizedKind)) {
-        res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
-        res.end('Invalid kind');
-        return;
-      }
-      const filtered = normalizedKind ? phrases.filter((item) => item.kind === normalizedKind) : phrases;
-      if (normalizedKind && filtered.length === 0) {
-        res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
-        res.end('Kind file is not accessible');
-        return;
-      }
-      const phrase = pickRandom(filtered);
-      res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
-      res.end(phrase.text);
-      return;
-    }
-
-    if (req.method === 'GET' && requestUrl.pathname === '/favicon.svg') {
-      res.writeHead(200, { 'content-type': 'image/svg+xml; charset=utf-8' });
-      res.end(readFileSync(path.join(BASE_DIR, 'favicon.svg'), 'utf8'));
-      return;
-    }
-
-    if (req.method === 'GET' && requestUrl.pathname === '/') {
-      const selectedKind = VALID_KINDS.has(normalizedKind) ? normalizedKind : 'any';
-      const filtered = selectedKind === 'any' ? phrases : phrases.filter((item) => item.kind === selectedKind);
-      const phrase = pickRandom(filtered);
-      const page = PAGE_TEMPLATE
-        .replace('{{PHRASE_PLACEHOLDER}}', phrase.text)
-        .replace('{{CHECKED_ANY}}', selectedKind === 'any' ? 'checked' : '')
-        .replace('{{CHECKED_AGREE}}', selectedKind === 'agree' ? 'checked' : '')
-        .replace('{{CHECKED_CONFIRM}}', selectedKind === 'confirm' ? 'checked' : '')
-        .replace('{{CHECKED_CONTRADICT}}', selectedKind === 'contradict' ? 'checked' : '')
-        .replace('{{CHECKED_ENCOURAGE}}', selectedKind === 'encourage' ? 'checked' : '');
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      res.end(page);
-      return;
-    }
-
-    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-    res.end('Not Found');
+  app.post('/mcp', express.json(), async (req, res) => {
+    const mcpServer = createMcpServer(yesPhrases, noPhrases);
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+    res.on('close', () => {
+      transport.close();
+      mcpServer.close();
+    });
+    await mcpServer.connect(transport);
+    await transport.handleRequest(req, res, req.body ?? {});
   });
+
+  app.get('/yes', (req, res) => {
+    const kind = req.query.kind === 'any' ? null : req.query.kind;
+    if (kind && !VALID_YES_KINDS.has(kind)) return res.status(400).type('text/plain').send('Invalid kind');
+    const filtered = kind ? yesPhrases.filter((item) => item.kind === kind) : yesPhrases;
+    if (kind && filtered.length === 0) return res.status(400).type('text/plain').send('Kind file is not accessible');
+    return res.status(200).type('text/plain').send(pickRandom(filtered).text);
+  });
+
+  app.get('/no', (req, res) => {
+    const kind = req.query.kind === 'any' ? null : req.query.kind;
+    if (kind && !VALID_NO_KINDS.has(kind)) return res.status(400).type('text/plain').send('Invalid kind');
+    const filtered = kind ? noPhrases.filter((item) => item.kind === kind) : noPhrases;
+    if (kind && filtered.length === 0) return res.status(400).type('text/plain').send('Kind file is not accessible');
+    return res.status(200).type('text/plain').send(pickRandom(filtered).text);
+  });
+
+  app.get('/', (req, res) => {
+    const tab = req.query.tab === 'no' ? 'no' : 'yes';
+    const kind = req.query.kind;
+
+    const selectedYesKind = tab === 'yes' && VALID_YES_KINDS.has(kind) ? kind : 'any';
+    const selectedNoKind = tab === 'no' && VALID_NO_KINDS.has(kind) ? kind : 'any';
+
+    const yesFiltered = selectedYesKind === 'any' ? yesPhrases : yesPhrases.filter((item) => item.kind === selectedYesKind);
+    const noFiltered = selectedNoKind === 'any' ? noPhrases : noPhrases.filter((item) => item.kind === selectedNoKind);
+
+    return res.render('index', {
+      yesPhrase: pickRandom(yesFiltered).text,
+      noPhrase: pickRandom(noFiltered).text,
+      selectedYesKind,
+      selectedNoKind,
+      activeTab: tab
+    });
+  });
+
+  app.use((_req, res) => res.status(404).type('text/plain').send('Not Found'));
+  return http.createServer(app);
 }
 
 async function start() {
-  const phrases = await loadPhrases();
+  const yesPhrases = await loadPhrases(YES_DIR, VALID_YES_KINDS);
+  const noPhrases = await loadPhrases(NO_DIR, VALID_NO_KINDS);
   const port = Number(process.env.PORT || 3000);
-  const server = createApp({ phrases });
+  const server = createApp({ yesPhrases, noPhrases });
 
-  server.listen(port, () => {
-    process.stdout.write(`Server listening on :${port}
-`);
-  });
+  server.listen(port, () => process.stdout.write(`Server listening on :${port}\n`));
+
+  const shutdown = (signal) => {
+    process.stdout.write(`Received ${signal}, shutting down gracefully...\n`);
+    server.close(() => {
+      process.stdout.write('Shutdown complete.\n');
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 10000).unref();
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
-if (require.main === module) {
+if (process.argv[1] === __filename) {
   start().catch((error) => {
-    process.stderr.write(`${error.stack || error}
-`);
+    process.stderr.write(`${error.stack || error}\n`);
     process.exitCode = 1;
   });
 }
 
-module.exports = { loadPhrases, loadKindPhrases, createApp, createMcpServer, VALID_KINDS, MCP_RESOURCE_URI };
+export { loadPhrases, loadKindPhrases, createApp, createMcpServer, VALID_YES_KINDS, VALID_NO_KINDS, MCP_RESOURCE_URI, YES_DIR, NO_DIR };

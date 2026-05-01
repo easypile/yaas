@@ -15,7 +15,9 @@ RUN npm ci --omit=dev && \
     npm cache clean --force
 
 # Copy application files
-COPY server.js template.html favicon.svg ./
+COPY server.js ./
+COPY views ./views
+COPY public ./public
 COPY data ./data
 COPY docs ./docs
 
