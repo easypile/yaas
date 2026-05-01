@@ -28,7 +28,10 @@ async function withServer(fn, dataDir = 'data') {
 async function mcpCall(base, method, params) {
   const res = await fetch(`${base}/mcp`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      'accept': 'application/json, text/event-stream'
+    },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
   });
   return { status: res.status, body: await res.json() };
@@ -53,7 +56,11 @@ test('GET /yes rejects invalid kind', async () => {
 
 test('MCP initialize returns detailed server description', async () => {
   await withServer(async (base) => {
-    const { status, body } = await mcpCall(base, 'initialize');
+    const { status, body } = await mcpCall(base, 'initialize', {
+      protocolVersion: '2024-11-05',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1.0' }
+    });
     assert.equal(status, 200);
     assert.match(body.result.instructions, /validated yes-like responses/);
     assert.equal(body.result.serverInfo.name, 'yaas-mcp-server');
@@ -72,8 +79,8 @@ test('MCP tools/list returns get-yes tool with description', async () => {
 test('MCP get-yes returns error for invalid kind', async () => {
   await withServer(async (base) => {
     const { body } = await mcpCall(base, 'tools/call', { name: 'get-yes', arguments: { kind: 'bad' } });
-    assert.equal(body.error.code, -32000);
-    assert.match(body.error.message, /Invalid kind/);
+    assert.equal(body.result.isError, true);
+    assert.match(body.result.content[0].text, /Invalid kind/);
   });
 });
 
@@ -100,26 +107,31 @@ test('MCP notifications/initialized returns no content', async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/mcp`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        'accept': 'application/json, text/event-stream'
+      },
       body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })
     });
-    assert.equal(res.status, 204);
+    assert.equal(res.status, 202);
     const body = await res.text();
     assert.equal(body, '');
   });
 });
 
-test('MCP notifications/initialized with id returns error', async () => {
+test('MCP notifications/initialized with id returns method not found', async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/mcp`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        'accept': 'application/json, text/event-stream'
+      },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'notifications/initialized' })
     });
-    assert.equal(res.status, 400);
+    assert.equal(res.status, 200);
     const body = await res.json();
-    assert.equal(body.error.code, -32600);
-    assert.match(body.error.message, /must not include an id/);
+    assert.equal(body.error.code, -32601);
   });
 });
 
@@ -127,10 +139,13 @@ test('MCP handles other notification methods correctly', async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/mcp`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        'accept': 'application/json, text/event-stream'
+      },
       body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/cancelled' })
     });
-    assert.equal(res.status, 204);
+    assert.equal(res.status, 202);
   });
 });
 

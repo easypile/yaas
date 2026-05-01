@@ -7,6 +7,10 @@ const { createInterface } = require('node:readline');
 const { URL } = require('node:url');
 const path = require('node:path');
 
+const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
+const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
+const { z } = require('zod');
+
 const BASE_DIR = __dirname;
 const DATA_DIR = process.env.YES_DATA_DIR || path.join(BASE_DIR, 'data');
 const VALID_KINDS = new Set(['agree', 'confirm', 'contradict', 'encourage']);
@@ -51,144 +55,50 @@ function pickRandom(items) {
   return items[Math.floor(Math.random() * items.length)];
 }
 
-function createJsonRpcResponse(id, result) {
-  return JSON.stringify({ jsonrpc: '2.0', id, result });
-}
-
-function createJsonRpcError(id, code, message) {
-  return JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } });
-}
-
-function handleMcpRequest(payload, phrases) {
-  const id = Object.prototype.hasOwnProperty.call(payload, 'id') ? payload.id : null;
-
-  if (!payload || payload.jsonrpc !== '2.0' || typeof payload.method !== 'string') {
-    return { status: 400, body: createJsonRpcError(id, -32600, 'Invalid Request') };
-  }
-
-  if (payload.method === 'initialize') {
-    return {
-      status: 200,
-      body: createJsonRpcResponse(id, {
-        protocolVersion: '2024-11-05',
-        serverInfo: {
-          name: 'yaas-mcp-server',
-          version: '1.0.0'
-        },
-        instructions: 'Use this server when you need validated yes-like responses. Prefer get-yes with an optional kind. See the instruction resource for usage details.',
-        capabilities: {
-          tools: {},
-          resources: {}
-        }
-      })
-    };
-  }
-
-  if (payload.method === 'tools/list') {
-    return {
-      status: 200,
-      body: createJsonRpcResponse(id, {
-        tools: [
-          {
-            name: 'get-yes',
-            title: 'Get Yes Phrase',
-            description: 'Returns a yes-like phrase from the YAAS phrase library. Use this when you need short affirmative or supportive language. Optional kind must be one of: agree, confirm, contradict, encourage. Returns an error for unsupported kind values.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                kind: {
-                  type: 'string',
-                  description: 'Optional phrase category. Supported values: agree, confirm, contradict, encourage.'
-                }
-              },
-              additionalProperties: false
-            }
-          }
-        ]
-      })
-    };
-  }
-
-  if (payload.method === 'tools/call') {
-    const params = payload.params || {};
-    const args = params.arguments || {};
-    if (params.name !== 'get-yes') {
-      return { status: 200, body: createJsonRpcError(id, -32601, 'Tool not found') };
+function createMcpServer(phrases) {
+  const server = new McpServer(
+    { name: 'yaas-mcp-server', version: '1.0.0' },
+    {
+      capabilities: { tools: {}, resources: {} },
+      instructions: 'Use this server when you need validated yes-like responses. Prefer get-yes with an optional kind. See the instruction resource for usage details.'
     }
+  );
 
-    const kind = args.kind;
+  server.registerTool('get-yes', {
+    title: 'Get Yes Phrase',
+    description: 'Returns a yes-like phrase from the YAAS phrase library. Use this when you need short affirmative or supportive language. Optional kind must be one of: agree, confirm, contradict, encourage. Returns an error for unsupported kind values.',
+    inputSchema: {
+      kind: z.string().optional().describe('Optional phrase category. Supported values: agree, confirm, contradict, encourage.')
+    }
+  }, async ({ kind } = {}) => {
     if (kind != null && !VALID_KINDS.has(kind)) {
-      return { status: 200, body: createJsonRpcError(id, -32000, `Invalid kind: ${kind}`) };
+      throw new Error(`Invalid kind: ${kind}`);
     }
 
     const filtered = kind ? phrases.filter((item) => item.kind === kind) : phrases;
     if (filtered.length === 0) {
-      return { status: 200, body: createJsonRpcError(id, -32001, 'No phrases available for requested kind') };
+      throw new Error('No phrases available for requested kind');
     }
 
     const phrase = pickRandom(filtered);
     return {
-      status: 200,
-      body: createJsonRpcResponse(id, {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({ kind: phrase.kind, text: phrase.text })
-          }
-        ]
-      })
+      content: [{ type: 'text', text: JSON.stringify({ kind: phrase.kind, text: phrase.text }) }]
     };
-  }
+  });
 
-  if (payload.method === 'resources/list') {
-    return {
-      status: 200,
-      body: createJsonRpcResponse(id, {
-        resources: [
-          {
-            uri: MCP_RESOURCE_URI,
-            name: 'YAAS MCP Usage Instructions',
-            description: 'Guidance explaining when to use this MCP server and how to call get-yes effectively.',
-            mimeType: 'text/markdown'
-          }
-        ]
-      })
-    };
-  }
+  server.registerResource(
+    'YAAS MCP Usage Instructions',
+    MCP_RESOURCE_URI,
+    {
+      description: 'Guidance explaining when to use this MCP server and how to call get-yes effectively.',
+      mimeType: 'text/markdown'
+    },
+    async () => ({
+      contents: [{ uri: MCP_RESOURCE_URI, mimeType: 'text/markdown', text: MCP_INSTRUCTIONS }]
+    })
+  );
 
-  if (payload.method === 'resources/read') {
-    const params = payload.params || {};
-    if (params.uri !== MCP_RESOURCE_URI) {
-      return { status: 200, body: createJsonRpcError(id, -32002, 'Resource not found') };
-    }
-
-    return {
-      status: 200,
-      body: createJsonRpcResponse(id, {
-        contents: [
-          {
-            uri: MCP_RESOURCE_URI,
-            mimeType: 'text/markdown',
-            text: MCP_INSTRUCTIONS
-          }
-        ]
-      })
-    };
-  }
-
-  // Handle notifications (methods starting with 'notifications/')
-  // Per JSON-RPC 2.0 spec, notifications must not have an id field
-  if (payload.method && payload.method.startsWith('notifications/')) {
-    if (Object.prototype.hasOwnProperty.call(payload, 'id')) {
-      return { status: 400, body: createJsonRpcError(null, -32600, 'Notifications must not include an id field') };
-    }
-    // Accept all MCP notifications without specific handling.
-    // This supports notifications/initialized and future notification methods.
-    // Notifications do not expect a response per JSON-RPC 2.0 spec.
-    return { status: 204, body: '' };
-  }
-
-  return { status: 200, body: createJsonRpcError(id, -32601, 'Method not found') };
+  return server;
 }
 
 function createApp({ phrases }) {
@@ -216,19 +126,31 @@ function createApp({ phrases }) {
       req.on('data', (chunk) => {
         raw += chunk;
       });
-      req.on('end', () => {
-        let payload;
+      req.on('end', async () => {
+        let parsedBody;
         try {
-          payload = JSON.parse(raw || '{}');
+          parsedBody = JSON.parse(raw || '{}');
         } catch {
-          res.writeHead(400, { ...mcpCorsHeaders, 'content-type': 'application/json; charset=utf-8' });
-          res.end(createJsonRpcError(null, -32700, 'Parse error'));
-          return;
+          parsedBody = null;
         }
 
-        const response = handleMcpRequest(payload, phrases);
-        res.writeHead(response.status, { ...mcpCorsHeaders, 'content-type': 'application/json; charset=utf-8' });
-        res.end(response.body);
+        // A new server and transport are created per request so that concurrent
+        // stateless requests do not share transport state.
+        const mcpServer = createMcpServer(phrases);
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: undefined,
+          enableJsonResponse: true
+        });
+
+        // Register cleanup before handling the request to avoid a race where
+        // the response finishes before the close handler is attached.
+        res.on('close', () => {
+          transport.close();
+          mcpServer.close();
+        });
+
+        await mcpServer.connect(transport);
+        await transport.handleRequest(req, res, parsedBody);
       });
       return;
     }
@@ -297,4 +219,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { loadPhrases, loadKindPhrases, createApp, VALID_KINDS, handleMcpRequest, MCP_RESOURCE_URI };
+module.exports = { loadPhrases, loadKindPhrases, createApp, createMcpServer, VALID_KINDS, MCP_RESOURCE_URI };
