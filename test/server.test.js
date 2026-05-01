@@ -3,11 +3,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { once } = require('node:events');
+const os = require('node:os');
+const path = require('node:path');
+const { mkdtemp, writeFile } = require('node:fs/promises');
 const { loadPhrases, createApp, VALID_KINDS } = require('../server');
 
-async function withServer(fn) {
-  const phrases = await loadPhrases('data/yes.yaml');
-  const server = createApp({ phrases });
+async function withServer(fn, dataDir = 'data') {
+  const phrases = await loadPhrases(dataDir);
+  const server = createApp({ phrases, dataDir });
   server.listen(0);
   await once(server, 'listening');
 
@@ -46,6 +49,16 @@ test('GET /yes rejects invalid kind', async () => {
     const res = await fetch(`${base}/yes?kind=unknown`);
     assert.equal(res.status, 400);
   });
+});
+
+test('GET /yes returns 400 when kind file is missing', async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'yes-data-'));
+  await writeFile(path.join(dataDir, 'agree.txt'), 'A\nB\n', 'utf8');
+
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/yes?kind=confirm`);
+    assert.equal(res.status, 400);
+  }, dataDir);
 });
 
 test('unknown route returns 404', async () => {
