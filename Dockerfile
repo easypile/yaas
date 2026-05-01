@@ -3,6 +3,7 @@ WORKDIR /app
 
 COPY package.json server.js template.html favicon.svg ./
 COPY data ./data
+COPY docs ./docs
 
 ENV NODE_ENV=production
 EXPOSE 3000
