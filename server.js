@@ -176,12 +176,14 @@ function handleMcpRequest(payload, phrases) {
     };
   }
 
-  if (payload.method === 'notifications/initialized') {
-    // Per JSON-RPC 2.0 spec, notifications must not have an id field
+  // Handle notifications (methods starting with 'notifications/')
+  // Per JSON-RPC 2.0 spec, notifications must not have an id field
+  if (payload.method && payload.method.startsWith('notifications/')) {
     if (Object.prototype.hasOwnProperty.call(payload, 'id')) {
       return { status: 400, body: createJsonRpcError(null, -32600, 'Invalid Request') };
     }
     // Notification - no response expected
+    // Currently we accept all notifications without specific handling
     return { status: 204, body: '' };
   }
 

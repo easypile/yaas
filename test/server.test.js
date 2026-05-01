@@ -122,6 +122,17 @@ test('MCP notifications/initialized with id returns error', async () => {
   });
 });
 
+test('MCP handles other notification methods correctly', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/cancelled' })
+    });
+    assert.equal(res.status, 204);
+  });
+});
+
 test('unknown route returns 404', async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/nope`);
