@@ -96,6 +96,44 @@ test('MCP endpoint handles CORS preflight', async () => {
   });
 });
 
+test('MCP notifications/initialized returns no content', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })
+    });
+    assert.equal(res.status, 204);
+    const body = await res.text();
+    assert.equal(body, '');
+  });
+});
+
+test('MCP notifications/initialized with id returns error', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'notifications/initialized' })
+    });
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.equal(body.error.code, -32600);
+    assert.match(body.error.message, /must not include an id/);
+  });
+});
+
+test('MCP handles other notification methods correctly', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/cancelled' })
+    });
+    assert.equal(res.status, 204);
+  });
+});
+
 test('unknown route returns 404', async () => {
   await withServer(async (base) => {
     const res = await fetch(`${base}/nope`);
