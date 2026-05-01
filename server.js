@@ -46,8 +46,8 @@ function pickRandom(items) {
   return items[Math.floor(Math.random() * items.length)];
 }
 
-function createApp({ phrases, dataDir = DATA_DIR }) {
-  return createServer(async (req, res) => {
+function createApp({ phrases }) {
+  return createServer((req, res) => {
     const requestUrl = new URL(req.url, 'http://localhost');
 
     if (req.method !== 'GET' || requestUrl.pathname !== '/yes') {
@@ -63,20 +63,15 @@ function createApp({ phrases, dataDir = DATA_DIR }) {
       return;
     }
 
-    if (kind) {
-      try {
-        const filtered = await loadKindPhrases(dataDir, kind);
-        const phrase = pickRandom(filtered);
-        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify(phrase));
-      } catch {
-        res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: 'Kind file is not accessible' }));
-      }
+    const filtered = kind ? phrases.filter((item) => item.kind === kind) : phrases;
+
+    if (kind && filtered.length === 0) {
+      res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Kind file is not accessible' }));
       return;
     }
 
-    const phrase = pickRandom(phrases);
+    const phrase = pickRandom(filtered);
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(phrase));
   });
